@@ -1,0 +1,89 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Nadhir"
+date: "7 octobre 2017"
+output: html_document
+---
+
+## Goal of the analysis
+the goal of this project is to predict the manner in wich Weight Lifting Exercises were performed. 
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har 
+
+## initilizing and loading data
+```{r libraries}
+library(caret)
+library(randomForest)
+library(rattle)
+training<-read.csv("~/pml-training.csv", na.strings = c("NA", "", "#DIV0!"))
+testing<-read.csv("~/pml-testing.csv", na.strings = c("NA", "", "#DIV0!"))
+```
+
+## Cleaning data
+Some variables in the training set contains 97% of the time "NA". Now looking to the test data, we can see that the same columns contain fully "NA". It means that even if we find a way to use these variables, it will not be with much help in predecting in the testing set outcomes later.
+We will then disregard thes predictors, as well as columns containing general informations about the exercice and no measurements.
+
+```{r cleaning}
+training_temp1<-training[,colSums(is.na(testing))==0]
+training_temp2<-training_temp1[,8:dim(training_temp1)[2]]
+testing.temp<-testing[,colSums(is.na(testing))==0]
+testing.final<-testing.temp[,8:dim(testing.temp)[2]]
+```
+
+## Building prediction models :
+### Partitioning the training set for corss validation :
+We will divide the general training set into training and test data.
+```{r partition}
+set.seed(6494)
+intrain<-createDataPartition(training_temp2$classe, p = 0.60, list=FALSE)
+trdata<-training_temp2[intrain, ]
+tsdata<-training_temp2[-intrain, ]
+```
+
+### Training models :
+We then train several models using three different methods : decision trees, random forest and linear discriminant analysis:
+```{r training}
+set.seed(31322)
+# Decision tree model
+mod1<-train(classe ~ .,data=trdata, method="rpart")
+# Random forest
+mod2<-randomForest(classe ~.,trdata)
+# linear discriminant analysis
+mod3<-train(classe ~ .,data=trdata, method="lda")
+```
+
+### applying models to test data :
+
+```{r testing}
+# prediction for Decision tree
+prediction1<-predict(mod1, newdata = tsdata)
+# prediction for random forest
+prediction2<-predict(mod2, newdata = tsdata)
+# prediction for linear discriminant analysis
+prediction3<-predict(mod3, newdata = tsdata)
+```
+
+### accuracy and model selection
+```{r accuracy}
+# accuracy for Decision tree
+confusionMatrix(prediction1, tsdata$classe)$overall[1]
+# accuracy for random forest
+confusionMatrix(prediction2, tsdata$classe)$overall[1]
+outsampleerror<-1-confusionMatrix(prediction2, tsdata$classe)$overall[1]
+# accuracy for linear discriminant analysis
+confusionMatrix(prediction3, tsdata$classe)$overall[1]
+```
+
+for previous results we can see that model 2 (random forest) has the best accuracy of 99% with an out of sample error of  `r outsampleerror`, we will then retain this model.
+
+## Applying model to the inirial testing set
+We will use our random Forest model to predict the outcome of the initial testing set:
+```{r final}
+prediction.final<-predict(mod2, newdata = testing.final)
+prediction.final
+```
+
+
+### Appendix : Decision Tree plot
+```{r treeplot}
+fancyRpartPlot(mod1$finalModel)
+```
